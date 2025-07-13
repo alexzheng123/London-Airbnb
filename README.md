@@ -23,7 +23,7 @@ Extreme outliers were removed (listings above $1,000), and categorical features 
 - Conducted geospatial and 3D exploratory visualisation:
   - [Interactive Mapbox Plot](https://alexzheng123.github.io/London-Airbnb/mapbox.html)
   - [3D Scatter Plot](https://alexzheng123.github.io/London-Airbnb/3d_scatter.html)
-- Identified Westminster, Kensington, and Chelsea as the most expensive neighbourhoods
+- Identified Westminster, Kensington and Chelsea as the most expensive neighbourhoods
 
 ## Preprocessing
 
