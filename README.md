@@ -41,7 +41,7 @@ Extreme outliers were removed (listings above $1,000), and categorical features 
 | Ridge Regression               | 61.82          | 61.88    |
 | LASSO Regression               | 62.23          | 62.23    |
 | Random Forest (Bayesian tuned) | **45.79**          | **45.40**    |
-| Feedforward Neural Network     | 54.24          | 54.62    |
+| Feedforward Neural Network     | 52.94          | 53.62    |
 
 ### Summary
 - Random Forest achieved the best performance.
