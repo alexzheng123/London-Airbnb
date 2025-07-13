@@ -45,7 +45,7 @@ Extreme outliers were removed (listings above $1,000), and categorical features 
 
 ### Summary
 - Random Forest achieved the best performance.
-- Ridge and LASSO provided good interpretability, revealing that location features (e.g. Westminster) had the most impact.
+- Ridge and LASSO provided good interpretability, showing that location features (e.g. Westminster) had the most impact.
 - FNN handled complex nonlinear patterns well and ranked second in accuracy.
 
 ## Implementation Details
