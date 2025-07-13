@@ -22,7 +22,7 @@ Extreme outliers were removed (listings above $1,000), and categorical features 
 - Focused only on "Entire home/apt" listings to examine factors (such as location) that can influence prices
 - Conducted geospatial and 3D exploratory visualisation:
   - [Interactive Mapbox Plot](https://alexzheng123.github.io/Interactive-plots/mapbox.html)
-  - [3D Scatter Plot](https://alexzheng123.github.io/Interactive-plots/3d_scatter.html)
+  - [3D Scatter Plot](https://alexzheng123.github.io/London-Airbnb/Images/3d_scatter.html)
 - Identified Westminster, Kensington, and Chelsea as the most expensive neighbourhoods
 
 ## Preprocessing
