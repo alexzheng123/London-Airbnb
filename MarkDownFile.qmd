@@ -1,0 +1,779 @@
+---
+title: "Appendix"
+# author: "Donghua (Alex) Zheng"
+format:
+  pdf:
+    include-in-header:
+      text: |
+        % Custom page numbering for appendix
+        \renewcommand{\thepage}{A-\arabic{page}}
+editor: visual
+---
+
+::: {.callout-note appearance="simple"}
+American spellings were predominantly used in this appendix to maintain consistency with the coding language.
+:::
+
+## Data cleansing
+
+Run this on terminal to create a new virtual environment 'ec349_env':
+
+```         
+conda create --name ec349_env python=3.9 
+conda activate ec349_env 
+conda install tensorflow keras numpy pandas matplotlib seaborn
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Import Python libraries
+library(reticulate)
+use_condaenv("ec349_env", required = TRUE)
+library(tensorflow)
+library(keras)
+library(plotly)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Import R packages
+# install.packages("pacman")
+library(pacman)
+pacman::p_load(pacman, dplyr, ggplot2, plotly, tidyr, readr, plotly, 
+               caret, glmnet, randomForest, ParBayesianOptimization, 
+               progressr)
+
+# Global progress bar
+handlers("txtprogressbar")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Import the dataset
+data <- read_csv("listings.csv")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Keep relevant columns
+data_cleaned <- data %>% select(c(price,
+
+                                  room_type, property_type, accommodates,
+                                  bathrooms, bedrooms, beds, amenities,
+
+                                  neighbourhood_cleansed,
+                                  latitude, longitude, review_scores_location,
+
+                                  host_is_superhost, host_since, 
+                                  host_response_rate,
+                                  calculated_host_listings_count, 
+                                  host_has_profile_pic,
+                                  host_identity_verified,
+
+                                  review_scores_rating, number_of_reviews,
+
+                                  availability_30, availability_365))
+
+# Replace blank values with NA
+data_cleaned[data_cleaned == ""] <- NA
+
+# Drop missing values in the 'price' column
+data_cleaned <- data_cleaned %>% drop_na(price)
+
+# # Check columns numeric
+# sapply(data_cleaned, is.numeric)
+
+# Remove '$' sign in the 'price' column
+data_cleaned$price <- as.numeric(gsub("[$,]", "", data_cleaned$price))
+
+# Replace "N/A" with NA in 'host_response_rate'
+data_cleaned$host_response_rate[data_cleaned$host_response_rate == "N/A"] <- NA
+
+# Remove the "%" symbol and convert to decimals in 'host_response_rate'
+data_cleaned$host_response_rate <- 
+  as.numeric(gsub("%", "", data_cleaned$host_response_rate))/100
+
+# Convert TRUE/FALSE into 1 or 0
+data_cleaned <- data_cleaned %>%
+  mutate_at(vars(host_is_superhost, host_has_profile_pic, 
+                 host_identity_verified), as.numeric)
+
+# Convert the 'host_since' column to date format
+data_cleaned$host_since <- as.Date(data_cleaned$host_since)
+
+# Add 'host_years_of_experience' column and drop the 'host_since' column
+data_cleaned$host_years_of_experience <- 
+  as.numeric(difftime("2024-12-11", 
+                      data_cleaned$host_since, 
+                      units = "days")) / 365
+data_cleaned <- data_cleaned %>% select(-host_since)
+
+# Drop 'review_scores_rating', 'review_scores_location' 
+# and 'host_response_rate' due to large numbers of missing values
+data_cleaned <- data_cleaned %>% select(-c(review_scores_rating, 
+                                           review_scores_location, 
+                                           host_response_rate))
+
+# Drop extreme outliers
+data_cleaned <- data_cleaned %>% filter(price <= 1000)
+
+# Replace "[]" with NA in the 'amenities' column
+data_cleaned$amenities[data_cleaned$amenities == "[]"] <- NA
+
+# # Check for the number of missing values in each column
+# colSums(is.na(data_cleaned))
+
+# # Check the number of unique values in 'amenities'
+# n_distinct(data_cleaned$amenities)
+
+# Drop the 'amenities' column
+data_cleaned <- data_cleaned %>% select(-amenities)
+
+# Drop missing values
+data_cleaned <- data_cleaned %>% drop_na()
+```
+
+## Data analysis
+
+### Inspect the dataset further
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Boxplot for 'price'
+ggplot(data_cleaned, aes(x = price)) +
+  geom_boxplot(fill = "blue", color = "black") +
+  labs(title = "Boxplot of Price", x = "Price")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Frequency of values in 'room_type'
+table(data_cleaned$room_type)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot bar chart for 'room_type'
+ggplot(data_cleaned, aes(x = room_type)) +
+  geom_bar(fill = "blue", color = "black") +
+  labs(title = "Bar Chart of Room Type", x = "Room Type", y = "Frequency")
+```
+
+```         
+# Unique values in 'property_type'
+unique(data_cleaned$property_type)
+
+# Frequency of values in 'property_type'
+table(data_cleaned$property_type)
+```
+
+```         
+# Unique values in 'neighbourhood_cleansed'
+unique(data_cleaned$neighbourhood_cleansed)
+
+# Frequency of values in 'neighbourhood_cleansed'
+table(data_cleaned$neighbourhood_cleansed)
+```
+
+```         
+# Check other variables for value frequencies
+table(data_cleaned$host_is_superhost)
+table(data_cleaned$host_has_profile_pic)
+table(data_cleaned$host_identity_verified)
+```
+
+### Select a subset of the dataset for further analysis ('room_type' == Entire home/apt)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data_Entire_home_apt <- data_cleaned %>% filter(room_type == "Entire home/apt")
+
+# Mean price by 'neighbourhood_cleansed' for Entire home/apt
+mean_price_by_location <- data_Entire_home_apt %>%
+  group_by(neighbourhood_cleansed) %>%
+  summarize(mean_price = mean(price, na.rm = TRUE)) %>%
+  arrange(desc(mean_price))
+
+# Plot the mean price by neighbourhood location
+ggplot(mean_price_by_location, aes(x = reorder(neighbourhood_cleansed, 
+                                               -mean_price), 
+                                   y = mean_price)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Mean Price by Neighbourhood (Entire home/apt)", 
+       x = "Neighbourhood", 
+       y = "Mean Price") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+### Data visualization
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Select relevant columns
+data_subset <- data_cleaned %>%
+  select(price, accommodates, bathrooms, bedrooms, beds, host_is_superhost,
+         calculated_host_listings_count, host_has_profile_pic, 
+         host_identity_verified,
+         number_of_reviews, availability_30, availability_365, 
+         host_years_of_experience)
+
+# Reshape data into long format
+data_subset_long <- pivot_longer(data_subset, cols = -price, 
+                                 names_to = "Variable", values_to = "Value")
+
+# Create scatter plots with faceting
+ggplot(data_subset_long, aes(x = Value, y = price)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  facet_wrap(~Variable, scales = "free_x") + # Separate plots for each variable
+  labs(title = "Scatter Plots of Price vs Other Variables",
+       x = "Variable Values",
+       y = "Price (USD)") +
+  theme_minimal()
+```
+
+### Scatter mapbox plot for the prices
+
+```         
+fig_map <- plot_ly(
+  data = data_cleaned,
+  lat = ~latitude,
+  lon = ~longitude,
+  type = "scattermapbox",
+  mode = "markers",
+  marker = list(size = 8),
+  hoverinfo = "text",
+  text = ~paste("Price: $", price),
+  width = 600,
+  height = 600
+)
+
+# Customize the layout with mapbox style and center
+fig_map <- fig_map %>%
+  layout(
+    mapbox = list(
+      style = "open-street-map",
+      center = list(lat = 51.45, lon = 0), # Center on London
+      zoom = 8 # Adjust zoom level
+    )
+  )
+fig_map
+```
+
+![](Images/map.png)
+
+### 3D scatter plot with accommodates, bathrooms, and price
+
+```         
+fig_3d <- plot_ly(
+  data = data_cleaned,
+  x = ~accommodates,
+  y = ~bathrooms,
+  z = ~price,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 4, color = ~price, colorscale = "Viridis",
+                showscale = TRUE),
+  text = ~paste("Price: $", price, "<br>Accommodates: ", accommodates,
+                "<br>Bathrooms: ", bathrooms),
+  hoverinfo = "text"
+)
+
+# Customize layout
+fig_3d <- fig_3d %>%
+  layout(
+    title = "3D Scatter Plot of Price by Property Features",
+    scene = list(
+      xaxis = list(title = "Accommodates"),
+      yaxis = list(title = "Bathrooms"),
+      zaxis = list(title = "Price [USD]")
+    )
+  )
+fig_3d
+```
+
+![](Images/3d.png)
+
+## Modeling
+
+### Prepare data
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+set.seed(42) # For reproducibility 
+
+# Define train, val, test sizes
+train_size <- 0.7
+val_size <- 0.2
+test_size <- 0.1
+
+n <- nrow(data_cleaned) # Total number of rows
+indices <- sample(seq_len(n)) # Shuffle row indices
+
+# Compute split indices
+train_indices <- indices[1:floor(train_size * n)]
+val_indices <- 
+  indices[(floor(train_size * n) + 1):(floor((train_size + val_size) * n))]
+test_indices <- indices[(floor((train_size + val_size) * n) + 1):n]
+```
+
+### OneHotEncoding & Train, Val, Test Split
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# One-hot encoding 
+dummy <- dummyVars(" ~ .", data = data_cleaned, levelsOnly = FALSE)
+data_encoded <- data.frame(predict(dummy, newdata = data_cleaned))
+
+# Remove predictors with zero variance
+zero_variance_cols <- nearZeroVar(data_encoded)
+data_encoded <- data_encoded[, -zero_variance_cols]
+
+# Split data into train, validation, and test sets
+target <- 'price'
+y <- data_encoded %>% pull(target)
+X <- data_encoded %>% select(-target)
+
+X_train <- X[train_indices, , drop = FALSE]
+y_train <- y[train_indices]
+
+X_val <- X[val_indices, , drop = FALSE]
+y_val <- y[val_indices]
+
+X_test <- X[test_indices, , drop = FALSE]
+y_test <- y[test_indices]
+
+# Print dimensions
+cat("X_train shape:", dim(X_train), "\n")
+cat("y_train shape:", length(y_train), "\n")
+cat("X_val shape:", dim(X_val), "\n")
+cat("y_val shape:", length(y_val), "\n")
+cat("X_test shape:", dim(X_test), "\n")
+cat("y_test shape:", length(y_test), "\n")
+```
+
+### Cluster analysis on the training set (PCA & k-means)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Standardization (only on training set)
+X_train_scaled <- scale(X_train)
+
+# Check dimensions
+dim(X_train_scaled)
+
+# Reduce dimensionality (PCA) before clustering (keep ~95% variance)
+pca_result <- prcomp(X_train_scaled)
+num_components <- 
+  which(cumsum(pca_result$sdev^2) / sum(pca_result$sdev^2) >= 0.95)[1]
+X_train_pca <- pca_result$x[, 1:num_components]
+
+# Check dimensions
+dim(X_train_pca)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Determine optimal number of clusters (elbow method)
+
+# Compute Within-Cluster Sum of Squares (WCSS) for k = 1 to 20 (on training data)
+wss <- numeric(20)
+
+for (k in 1:20) {
+  km_model <- kmeans(X_train_pca, centers = k, 
+                     nstart = 10, 
+                     iter.max = 300, 
+                     algorithm = "Lloyd")
+  wss[k] <- km_model$tot.withinss
+}
+
+# Plot WCSS vs. Number of Clusters
+plot(1:20, wss, type = "b", pch = 20,
+     xlab = "Number of Clusters (k)",
+     ylab = "Total Within-Clusters Sum of Squares",
+     main = "Elbow Method for Optimal k")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Optimal k value 
+k_optimal <- 12
+
+# Run k-means on training data
+set.seed(42)
+km_model <- kmeans(X_train_pca, centers = k_optimal,
+                   nstart = 25, iter.max = 300, algorithm = "Lloyd")
+
+# Evaluate clusters 
+table(km_model$cluster)
+```
+
+#### Visualize the clusters
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Ensure X_train_pca is a dataframe and add cluster labels
+X_train_pca_df <- as.data.frame(X_train_pca)
+X_train_pca_df$cluster <- factor(km_model$cluster) 
+
+# Create a scatter plot of clusters using PC1 and PC2 (training set only)
+ggplot(data = X_train_pca_df, aes(x = PC1, y = PC2, color = cluster)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Cluster Visualization (PCA - training set)", 
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+```
+
+#### Visualize the distribution of the target variable across clusters
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = data.frame(cluster = km_model$cluster, 
+                         y_train = y_train), 
+       aes(x = factor(cluster), y = y_train)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Target Variable by Cluster", 
+       x = "Cluster", 
+       y = "Target Variable")
+```
+
+```         
+# Assign labels to the original training set
+X_train$cluster <- factor(km_model$cluster) 
+```
+
+#### Use the k-mean model to assign labels to the val and test sets
+
+-   The clusters were tested and found to lower model accuracy; therefore, they were not implemented in this project
+
+```         
+# Define predict_kmeans function
+predict_kmeans <- function(km_model, newdata) {
+  apply(newdata, 1, function(row) {
+    which.min(colSums((t(km_model$centers) - row)^2))
+  })
+}
+```
+
+```         
+# Standardization 
+X_val_scaled <- scale(X_val, center = attr(X_train_scaled, "scaled:center"), 
+scale = attr(X_train_scaled, "scaled:scale"))
+X_test_scaled <- scale(X_test, center = attr(X_train_scaled, "scaled:center"), 
+scale = attr(X_train_scaled, "scaled:scale"))
+
+# Apply PCA 
+X_val_pca <- predict(pca_result, newdata = X_val_scaled)
+X_test_pca <- predict(pca_result, newdata = X_test_scaled)
+
+# Assign cluster labels to the original val and test sets
+X_val$cluster <- factor(predict_kmeans(km_model, newdata = X_val_pca))
+X_test$cluster <- factor(predict_kmeans(km_model, newdata = X_test_pca))
+```
+
+```         
+# Convert the cluster column into one-hot encoded columns
+X_train_cluster_onehot <- model.matrix(~ cluster - 1, data = X_train)
+X_val_cluster_onehot <- model.matrix(~ cluster - 1, data = X_val)
+X_test_cluster_onehot <- model.matrix(~ cluster - 1, data = X_test)
+
+# Combine one-hot encoded cluster columns with the rest of the features
+X_train <- cbind(X_train[, !colnames(X_train) %in% "cluster"], X_train_cluster_onehot)
+X_val <- cbind(X_val[, !colnames(X_val) %in% "cluster"], X_val_cluster_onehot)
+X_test <- cbind(X_test[, !colnames(X_test) %in% "cluster"], X_test_cluster_onehot)
+```
+
+### Baseline model
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Mean of the target column
+y_mean <- mean(y_train)
+
+# Forecast validation and test sets using mean price
+val_forecast_baseline <- rep(y_mean, length(y_val))
+test_forecast_baseline <- rep(y_mean, length(y_test))
+
+# Mean Absolute Error (MAE) for validation and test sets
+val_mae_baseline <- mean(abs(y_val - val_forecast_baseline))
+test_mae_baseline <- mean(abs(y_test - test_forecast_baseline))
+
+# Print results
+cat("Mean price from training set:", y_mean, "\n")
+cat("Validation MAE (Baseline):", val_mae_baseline, "\n")
+cat("Test MAE (Baseline):", test_mae_baseline, "\n")
+```
+
+### Ridge regression
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+X_train <- model.matrix(~ ., data = X_train)[, -1] 
+X_val <- model.matrix(~ ., data = X_val)[, -1]
+X_test <- model.matrix(~ ., data = X_test)[, -1]
+
+# Fit the model
+model_ridge <- glmnet(X_train, y_train, alpha = 0)
+
+# # Plot coefficient shrinkage across lambda values
+# plot(model_ridge, xvar = "lambda")
+
+# Cross-validation for optimal lambda
+cv_ridge <- cv.glmnet(X_train, y_train, alpha = 0)
+
+# # Plot cross-validation results
+# plot(cv_ridge)
+
+# Optimal lambda value
+lambda_optimal <- cv_ridge$lambda.min
+cat("Optimal lambda:", lambda_optimal, "\n")
+
+# Refit model with optimal lambda
+model_ridge_optimal <- glmnet(X_train, y_train, alpha = 0, 
+                              lambda = lambda_optimal)
+
+# Evaluation
+val_predictions_ridge <- predict(model_ridge_optimal, 
+                                 s = lambda_optimal, newx = X_val)
+test_predictions_ridge <- predict(model_ridge_optimal, 
+                                  s = lambda_optimal, newx = X_test)
+
+# MAE for validation and test sets
+val_mae_ridge <- mean(abs(y_val - val_predictions_ridge))
+test_mae_ridge <- mean(abs(y_test - test_predictions_ridge))
+cat("Validation MAE (Ridge Regression):", val_mae_ridge, "\n")
+cat("Validation MAE (Ridge Regression):", test_mae_ridge, "\n")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Extract and print coefficients at the optimal lambda
+ridge_coefficients <- coef(model_ridge_optimal, s = lambda_optimal)
+print(ridge_coefficients)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot coefficient shrinkage across lambda values
+plot(model_ridge, xvar = "lambda")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot cross-validation results
+plot(cv_ridge)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot predictions vs actual values (test set)
+plot(test_predictions_ridge, y_test)
+abline(0, 1)
+```
+
+### LASSO regression
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Fit the model
+model_lasso <- glmnet(X_train, y_train, alpha = 1)  # Set alpha = 1 for LASSO
+
+# # Plot coefficient shrinkage across lambda values
+# plot(model_lasso, xvar = "lambda")
+
+# Cross-validation for optimal lambda
+cv_lasso <- cv.glmnet(X_train, y_train, alpha = 1) 
+
+# # Plot cross-validation results
+# plot(cv_lasso)
+
+# Optimal lambda value
+lambda_optimal <- cv_lasso$lambda.min
+cat("Optimal lambda:", lambda_optimal, "\n")
+
+# Refit model with optimal lambda
+model_lasso_optimal <- glmnet(X_train, y_train, alpha = 1, 
+                              lambda = lambda_optimal)
+
+# Evaluation
+val_predictions_lasso <- predict(model_lasso_optimal, 
+                                 s = lambda_optimal, newx = X_val)
+test_predictions_lasso <- predict(model_lasso_optimal, 
+                                  s = lambda_optimal, newx = X_test)
+
+# MAE for validation and test sets
+val_mae_lasso <- mean(abs(y_val - val_predictions_lasso))
+test_mae_lasso <- mean(abs(y_test - test_predictions_lasso))
+cat("Validation MAE (Lasso Regression):", val_mae_lasso, "\n")
+cat("Test MAE (Lasso Regression):", test_mae_lasso, "\n")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Extract and print coefficients at the optimal lambda
+lasso_coefficients <- coef(model_lasso_optimal, s = lambda_optimal)
+print(lasso_coefficients)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot coefficient shrinkage across lambda values
+plot(model_lasso, xvar = "lambda")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot cross-validation results
+plot(cv_lasso)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot predictions vs actual values (test set)
+plot(test_predictions_lasso, y_test)
+abline(0, 1)
+```
+
+### Random forest
+
+#### Hyperparameters tuning with Bayesian Optimization
+
+```         
+# Define a function for optimization
+optimization_rf <- function(mtry, ntree) {
+  set.seed(42)
+
+  # Train Random Forest with specified parameters
+  model <- randomForest(
+    x = X_train,
+    y = y_train,
+    mtry = floor(mtry), # mtry must be an integer
+    ntree = floor(ntree), # ntree must be an integer
+    importance = TRUE
+  )
+
+  # Predict on validation set
+  val_predictions <- predict(model, newdata = X_val)
+
+  # Calculate Mean Absolute Error (MAE)
+  val_mae <- mean(abs(y_val - val_predictions))
+
+  # Return negative MAE because Bayesian Optimization minimizes the objective
+  return(list(Score = -val_mae))
+}
+
+# Define bounds for hyperparameters
+bounds <- list(
+  mtry = c(2, ncol(X_train)), # Range of mtry values
+  ntree = c(100, 500)         # Range of ntree values
+)
+
+
+# Run Bayesian Optimization with progress tracking
+with_progress({
+  p <- progressor(along = seq_len(10)) # Define progress steps (10 iterations)
+
+  opt_results <- bayesOpt(
+    FUN = function(mtry, ntree) {
+      p("Optimizing...") # Signal progress
+
+      optimization_rf(mtry, ntree) # Call optimization function
+    },
+    bounds = bounds,
+    initPoints = 5, # Number of random points to start with
+    iters.n = 10,   # Number of iterations to refine the search
+    acq = "ei"      # Acquisition function (expected improvement)
+  )
+})
+print(opt_results)
+# Extract best hyperparameters
+best_params <- getBestPars(opt_results)
+cat("Best Parameters:\n")
+print(best_params)
+```
+
+Optimization results:
+
+-   mtry: 12.74439
+
+-   ntree: 443.0612
+
+#### Random forest with tuned hyperparameters
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Training 
+model_rf <- randomForest(x = X_train, y = y_train, ntree = 443,
+                         mtry = 13, importance = TRUE)
+print(model_rf)
+
+# Evaluate variables 
+importance(model_rf) # Display importance metrics
+
+# Predict and evaluate model performance
+val_predictions_rf <- predict(model_rf, newdata = X_val)
+test_predictions_rf <- predict(model_rf, newdata = X_test)
+
+# MAE for validation and test sets
+val_mae_rf <- mean(abs(y_val - val_predictions_rf))
+test_mae_rf <- mean(abs(y_test - test_predictions_rf))
+cat("Validation MAE (Random Forest):", val_mae_rf, "\n")
+cat("Test MAE (Random Forest):", test_mae_rf, "\n")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot variable importance based on %IncMSE
+
+importance <- as.data.frame(varImp(model_rf)) # Extract importance values
+importance$Variable <- rownames(importance) # Add variable names
+
+# Sort by importance and plot top 10 variables
+ggplot(importance, aes(x = reorder(Variable, Overall), y = Overall)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 7)) + 
+  labs(x = "Variables", y = "Importance", title = "Variable Importance")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot actual vs predicted values
+plot(y_test, test_predictions_rf)
+abline(0, 1) # Add a diagonal line for reference
+```
+
+### Feedforward neural network
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Standardization 
+X_train <- scale(X_train)
+
+# Use training set's mean and standard deviation for scaling validation and test sets
+X_val <- scale(X_val, center = attr(X_train, "scaled:center"), 
+               scale = attr(X_train, "scaled:scale"))
+X_test <- scale(X_test, center = attr(X_train, "scaled:center"), 
+                scale = attr(X_train, "scaled:scale"))
+
+tf$random$set_seed(42) # Set seed for tf
+
+# Define the model with dropout layers
+model_fnn <- keras_model_sequential() %>%
+  layer_dense(units = 64, activation = "relu", input_shape = ncol(X_train)) %>%
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 32, activation = "relu") %>%
+  layer_dropout(rate = 0.3) %>% 
+  layer_dense(units = 1) 
+
+# Compile the model 
+model_fnn %>% compile(
+  optimizer = "adam",
+  loss = "mse", 
+  metrics = c("mae")
+)
+
+# Early stopping 
+early_stopping <- callback_early_stopping(
+  monitor = "val_loss",     
+  patience = 10,              
+  restore_best_weights = TRUE 
+)
+
+# Train the model 
+history <- model_fnn %>% fit(
+  x = as.matrix(X_train),
+  y = y_train,
+  validation_data = list(as.matrix(X_val), y_val),
+  epochs = 100,              
+  batch_size = 32,         
+  verbose = 0,          
+  callbacks = list(early_stopping) 
+)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Plot training history
+plot(history)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Identify the chosen epoch with the lowest validation loss
+best_epoch <- which.min(history$metrics$val_loss) # Index of minimum validation loss
+
+cat("Best epoch (with lowest val_loss):", best_epoch, "\n")
+cat("Validation loss at best epoch:", min(history$metrics$val_loss), "\n")
+
+# Evaluate 
+model_fnn %>% evaluate(as.matrix(X_val), y_val)
+model_fnn %>% evaluate(as.matrix(X_test), y_test)
+```
