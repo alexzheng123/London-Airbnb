@@ -33,7 +33,7 @@ Extreme outliers were removed (listings above $1,000), and categorical features 
 - Standardisation and PCA for clustering
 - Clustering performed using k-means with k=12, though cluster labels were not used in final models due to poor impact on performance
 
-## Models Comparison
+## Model Comparison
 
 | Model                          | Validation MAE | Test MAE |
 |--------------------------------|----------------|----------|
