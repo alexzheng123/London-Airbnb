@@ -84,5 +84,5 @@ library(keras)
 
 - Location, availability, and size-related variables were the most predictive of price.
 - Host characteristics like profile picture and verification had little effect.
-- Clustering (k-means) failed to improve prediction accuracy when added as a feature.
+- Nonlinear models outperform linear models in forecasting accuracy.
 
